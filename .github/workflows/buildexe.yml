@@ -1,36 +1,50 @@
-# This is a basic workflow to help you get started with Actions
+name: 打包exe
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: windows-2016
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: 安装python环境
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+          cache: 'pip'
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: 安装requirements.txt
+        run: pip install -r requirements.txt
+
+      - name: 安装pyinstaller
+        run: pip install pyinstaller
+
+      - name: 打包单文件exe并移动至根目录
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          pyinstaller -F ./f.py
+          move ./dist/f.exe ./
+
+      - name: 打包exe为压缩包
+        run: |
+          pyinstaller -D ./f.py
+          Compress-Archive -Path ./dist/f/ -DestinationPath ./f.zip
+        
+      - name: 上传Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: f
+          path: dist/
+          
+      - name: 自动生成更新文档
+        run: write-output "CHANGELOG:${{ github.event.head_commit.message }}" | out-file -filepath ./CHANGELOG.txt
+        
+      - name: 上传Release
+        uses: ncipollo/release-action@v1.8.0
+        with:
+          artifacts: "./f.exe,./f.zip"
+          tag: ver-${{ github.sha }}
+          bodyFile: "./CHANGELOG.txt"
+          token: ${{ secrets.GITHUB_TOKEN }}
